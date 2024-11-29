@@ -1,2 +1,3 @@
 # enterprise-assets
-Public assets for Gitpod Enterrprise
+
+A kitchen sink for public assets related to Gitpod Enterprise

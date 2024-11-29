@@ -1,0 +1,377 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: "CloudWatch alarms for AWS Service Quotas monitoring"
+
+Parameters:
+  RDSQuotaThreshold:
+    Type: Number
+    Description: "Threshold percentage for RDS quota utilization"
+    Default: 80
+    MinValue: 1
+    MaxValue: 100
+  ELBQuotaThreshold:
+    Type: Number
+    Description: "Threshold percentage for ELB quota utilization"
+    Default: 80
+    MinValue: 1
+    MaxValue: 100
+  DynamoDBQuotaThreshold:
+    Type: Number
+    Description: "Threshold percentage for DynamoDB quota utilization"
+    Default: 80
+    MinValue: 1
+    MaxValue: 100
+  ASGQuotaThreshold:
+    Type: Number
+    Description: "Threshold percentage for Auto Scaling Groups quota utilization"
+    Default: 80
+    MinValue: 1
+    MaxValue: 100
+  FirehoseQuotaThreshold:
+    Type: Number
+    Description: "Threshold percentage for Firehose quota utilization"
+    Default: 80
+    MinValue: 1
+    MaxValue: 100
+  ECRQuotaThreshold:
+    Type: Number
+    Description: "Threshold percentage for ECR quota utilization"
+    Default: 80
+    MinValue: 1
+    MaxValue: 100
+  EC2QuotaThreshold:
+    Type: Number
+    Description: "Threshold percentage for EC2 quota utilization"
+    Default: 80
+    MinValue: 1
+    MaxValue: 100
+  NotificationEmail:
+    Type: String
+    Description: "Email address to receive quota alerts"
+
+Resources:
+  QuotaAlertsTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      DisplayName: "AWS Service Quotas Alerts"
+      TopicName: "service-quotas-alerts"
+
+  QuotaAlertsTopicPolicy:
+    Type: AWS::SNS::TopicPolicy
+    Properties:
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: cloudwatch.amazonaws.com
+            Action: sns:Publish
+            Resource: !Ref QuotaAlertsTopic
+      Topics:
+        - !Ref QuotaAlertsTopic
+
+  EmailSubscription:
+    Type: AWS::SNS::Subscription
+    Properties:
+      Protocol: email
+      TopicArn: !Ref QuotaAlertsTopic
+      Endpoint: !Ref NotificationEmail
+
+  QuotaAlarmsLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub "/aws/quota-alarms/${AWS::StackName}"
+      RetentionInDays: 7
+
+  QuotaAlarmsFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      Handler: index.handler
+      Role: !GetAtt QuotaAlarmsRole.Arn
+      Code:
+        ZipFile: |
+          exports.handler = async (event) => {
+              const message = event.Records[0].Sns.Message;
+              console.log('Quota Alarm:', message);
+              return message;
+          };
+      Runtime: nodejs22.x
+      Timeout: 30
+      Environment:
+        Variables:
+          LOG_LEVEL: INFO
+
+  QuotaAlarmsRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+
+  QuotaAlarmsFunctionPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !Ref QuotaAlarmsFunction
+      Principal: sns.amazonaws.com
+      SourceArn: !Ref QuotaAlertsTopic
+
+  QuotaAlarmsFunctionSubscription:
+    Type: AWS::SNS::Subscription
+    Properties:
+      Protocol: lambda
+      TopicArn: !Ref QuotaAlertsTopic
+      Endpoint: !GetAtt QuotaAlarmsFunction.Arn
+
+  RDSInstancesQuotaAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub "${AWS::StackName}-rds-instances-quota"
+      AlarmDescription: !Sub "Alarm when RDS instances quota utilization exceeds ${RDSQuotaThreshold}%"
+      MetricName: "ResourceCount"
+      Namespace: "AWS/Usage"
+      Dimensions:
+        - Name: "Service"
+          Value: "RDS"
+        - Name: "Type"
+          Value: "Resource"
+        - Name: "Resource"
+          Value: "DBInstances"
+        - Name: "Class"
+          Value: "None"
+      Statistic: "Maximum"
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: !Ref RDSQuotaThreshold
+      ComparisonOperator: "GreaterThanThreshold"
+      AlarmActions:
+        - !Ref QuotaAlertsTopic
+
+  RDSStorageQuotaAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub "${AWS::StackName}-rds-storage-quota"
+      AlarmDescription: !Sub "Alarm when RDS allocated storage exceeds ${RDSQuotaThreshold}%"
+      MetricName: "ResourceCount"
+      Namespace: "AWS/Usage"
+      Dimensions:
+        - Name: "Service"
+          Value: "RDS"
+        - Name: "Type"
+          Value: "Resource"
+        - Name: "Resource"
+          Value: "AllocatedStorage"
+        - Name: "Class"
+          Value: "None"
+      Statistic: "Maximum"
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: !Ref RDSQuotaThreshold
+      ComparisonOperator: "GreaterThanThreshold"
+      AlarmActions:
+        - !Ref QuotaAlertsTopic
+
+  ELBListenersQuotaAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub "${AWS::StackName}-elb-listeners-quota"
+      AlarmDescription: !Sub "Alarm when ELB listeners per ALB exceeds ${ELBQuotaThreshold}%"
+      MetricName: "ResourceCount"
+      Namespace: "AWS/Usage"
+      Dimensions:
+        - Name: "Service"
+          Value: "Elastic Load Balancing"
+        - Name: "Type"
+          Value: "Resource"
+        - Name: "Resource"
+          Value: "ListenersPerApplicationLoadBalancer"
+        - Name: "Class"
+          Value: "None"
+      Statistic: "Maximum"
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: !Ref ELBQuotaThreshold
+      ComparisonOperator: "GreaterThanThreshold"
+      AlarmActions:
+        - !Ref QuotaAlertsTopic
+
+  ELBTargetGroupsQuotaAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub "${AWS::StackName}-elb-target-groups-quota"
+      AlarmDescription: !Sub "Alarm when ELB target groups per region exceeds ${ELBQuotaThreshold}%"
+      MetricName: "ResourceCount"
+      Namespace: "AWS/Usage"
+      Dimensions:
+        - Name: "Service"
+          Value: "Elastic Load Balancing"
+        - Name: "Type"
+          Value: "Resource"
+        - Name: "Resource"
+          Value: "TargetGroupsPerRegion"
+        - Name: "Class"
+          Value: "None"
+      Statistic: "Maximum"
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: !Ref ELBQuotaThreshold
+      ComparisonOperator: "GreaterThanThreshold"
+      AlarmActions:
+        - !Ref QuotaAlertsTopic
+
+  DynamoDBTableQuotaAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub "${AWS::StackName}-dynamodb-tables-quota"
+      AlarmDescription: !Sub "Alarm when DynamoDB table count exceeds ${DynamoDBQuotaThreshold}%"
+      MetricName: "ResourceCount"
+      Namespace: "AWS/Usage"
+      Dimensions:
+        - Name: "Service"
+          Value: "DynamoDB"
+        - Name: "Type"
+          Value: "Resource"
+        - Name: "Resource"
+          Value: "TableCount"
+        - Name: "Class"
+          Value: "None"
+      Statistic: "Maximum"
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: !Ref DynamoDBQuotaThreshold
+      ComparisonOperator: "GreaterThanThreshold"
+      AlarmActions:
+        - !Ref QuotaAlertsTopic
+
+  AutoScalingGroupsQuotaAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub "${AWS::StackName}-asg-quota"
+      AlarmDescription: !Sub "Alarm when Auto Scaling Groups count exceeds ${ASGQuotaThreshold}%"
+      MetricName: "ResourceCount"
+      Namespace: "AWS/Usage"
+      Dimensions:
+        - Name: "Service"
+          Value: "AutoScaling"
+        - Name: "Type"
+          Value: "Resource"
+        - Name: "Resource"
+          Value: "NumberOfAutoScalingGroup"
+        - Name: "Class"
+          Value: "None"
+      Statistic: "Maximum"
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: !Ref ASGQuotaThreshold
+      ComparisonOperator: "GreaterThanThreshold"
+      AlarmActions:
+        - !Ref QuotaAlertsTopic
+
+  FirehoseStreamsQuotaAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub "${AWS::StackName}-firehose-streams-quota"
+      AlarmDescription: !Sub "Alarm when Firehose delivery streams count exceeds ${FirehoseQuotaThreshold}%"
+      MetricName: "ResourceCount"
+      Namespace: "AWS/Usage"
+      Dimensions:
+        - Name: "Service"
+          Value: "Firehose"
+        - Name: "Type"
+          Value: "Resource"
+        - Name: "Resource"
+          Value: "DeliveryStreams"
+        - Name: "Class"
+          Value: "None"
+      Statistic: "Maximum"
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: !Ref FirehoseQuotaThreshold
+      ComparisonOperator: "GreaterThanThreshold"
+      AlarmActions:
+        - !Ref QuotaAlertsTopic
+
+  ECRImagesQuotaAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub "${AWS::StackName}-ecr-images-quota"
+      AlarmDescription: !Sub "Alarm when ECR images per repository exceeds ${ECRQuotaThreshold}%"
+      MetricName: "ResourceCount"
+      Namespace: "AWS/Usage"
+      Dimensions:
+        - Name: "Service"
+          Value: "ECR"
+        - Name: "Type"
+          Value: "Resource"
+        - Name: "Resource"
+          Value: "ImagesPerRepository"
+        - Name: "Class"
+          Value: "None"
+      Statistic: "Maximum"
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: !Ref ECRQuotaThreshold
+      ComparisonOperator: "GreaterThanThreshold"
+      AlarmActions:
+        - !Ref QuotaAlertsTopic
+
+  EC2vCPUQuotaAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub "${AWS::StackName}-ec2-vcpu-quota"
+      AlarmDescription: !Sub "Alarm when EC2 vCPU quota utilization exceeds ${EC2QuotaThreshold}%"
+      MetricName: "ResourceCount"
+      Namespace: "AWS/Usage"
+      Dimensions:
+        - Name: "Service"
+          Value: "EC2"
+        - Name: "Type"
+          Value: "Resource"
+        - Name: "Resource"
+          Value: "vCPU"
+        - Name: "Class"
+          Value: "Standard/OnDemand"
+      Statistic: "Maximum"
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: !Ref EC2QuotaThreshold
+      ComparisonOperator: "GreaterThanThreshold"
+      AlarmActions:
+        - !Ref QuotaAlertsTopic
+
+  EC2GP3StorageQuotaAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub "${AWS::StackName}-ec2-gp3-storage-quota"
+      AlarmDescription: !Sub "Alarm when EC2 GP3 storage utilization exceeds ${EC2QuotaThreshold}%"
+      MetricName: "ResourceCount"
+      Namespace: "AWS/Usage"
+      Dimensions:
+        - Name: "Service"
+          Value: "EC2"
+        - Name: "Type"
+          Value: "Resource"
+        - Name: "Resource"
+          Value: "GP3Volume"
+        - Name: "Class"
+          Value: "None"
+      Statistic: "Maximum"
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: !Ref EC2QuotaThreshold
+      ComparisonOperator: "GreaterThanThreshold"
+      AlarmActions:
+        - !Ref QuotaAlertsTopic
+
+Outputs:
+  SNSTopicARN:
+    Description: "ARN of the SNS topic"
+    Value: !Ref QuotaAlertsTopic
+  LogGroupName:
+    Description: "Name of the CloudWatch Log Group for alerts"
+    Value: !Ref QuotaAlarmsLogGroup
