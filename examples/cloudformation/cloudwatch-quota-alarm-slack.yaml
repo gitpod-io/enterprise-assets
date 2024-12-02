@@ -186,53 +186,75 @@ Resources:
       AlarmActions:
         - !Ref QuotaAlertsTopic
 
-  ELBListenersQuotaAlarm:
+  ELBListenersPerNetworkQuotaAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
       AlarmName: !Sub "${AWS::StackName}-elb-listeners-quota"
-      AlarmDescription: !Sub "Alarm when ELB listeners per ALB exceeds ${ELBQuotaThreshold}%"
-      MetricName: "ResourceCount"
-      Namespace: "AWS/Usage"
-      Dimensions:
-        - Name: "Service"
-          Value: "Elastic Load Balancing"
-        - Name: "Type"
-          Value: "Resource"
-        - Name: "Resource"
-          Value: "ListenersPerApplicationLoadBalancer"
-        - Name: "Class"
-          Value: "None"
-      Statistic: "Maximum"
-      Period: 300
-      EvaluationPeriods: 1
-      Threshold: !Ref ELBQuotaThreshold
-      ComparisonOperator: "GreaterThanThreshold"
+      AlarmDescription: !Sub "Alarm when ELB listeners per network exceeds ${ELBQuotaThreshold}%"
+      ActionsEnabled: true
       AlarmActions:
         - !Ref QuotaAlertsTopic
+      EvaluationPeriods: 2
+      DatapointsToAlarm: 2
+      Threshold: !Ref ELBQuotaThreshold
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      Metrics:
+        - Id: usage_data
+          ReturnData: false
+          MetricStat:
+            Metric:
+              Namespace: AWS/Usage
+              MetricName: ResourceCount
+              Dimensions:
+                - Name: Class
+                  Value: None
+                - Name: Resource
+                  Value: ListenersPerNetworkLoadBalancer
+                - Name: Service
+                  Value: Elastic Load Balancing
+                - Name: Type
+                  Value: Resource
+            Period: 300
+            Stat: Maximum
+        - Id: pct_utilization
+          Label: "% Utilization"
+          ReturnData: true
+          Expression: (usage_data/SERVICE_QUOTA(usage_data))*100
 
   ELBTargetGroupsQuotaAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
       AlarmName: !Sub "${AWS::StackName}-elb-target-groups-quota"
       AlarmDescription: !Sub "Alarm when ELB target groups per region exceeds ${ELBQuotaThreshold}%"
-      MetricName: "ResourceCount"
-      Namespace: "AWS/Usage"
-      Dimensions:
-        - Name: "Service"
-          Value: "Elastic Load Balancing"
-        - Name: "Type"
-          Value: "Resource"
-        - Name: "Resource"
-          Value: "TargetGroupsPerRegion"
-        - Name: "Class"
-          Value: "None"
-      Statistic: "Maximum"
-      Period: 300
-      EvaluationPeriods: 1
-      Threshold: !Ref ELBQuotaThreshold
-      ComparisonOperator: "GreaterThanThreshold"
+      ActionsEnabled: true
       AlarmActions:
         - !Ref QuotaAlertsTopic
+      EvaluationPeriods: 2
+      DatapointsToAlarm: 2
+      Threshold: !Ref ELBQuotaThreshold
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      Metrics:
+        - Id: usage_data
+          ReturnData: false
+          MetricStat:
+            Metric:
+              Namespace: AWS/Usage
+              MetricName: ResourceCount
+              Dimensions:
+                - Name: Class
+                  Value: None
+                - Name: Resource
+                  Value: TargetGroupsPerRegion
+                - Name: Service
+                  Value: Elastic Load Balancing
+                - Name: Type
+                  Value: Resource
+            Period: 300
+            Stat: Maximum
+        - Id: pct_utilization
+          Label: "% Utilization"
+          ReturnData: true
+          Expression: (usage_data/SERVICE_QUOTA(usage_data))*100
 
   DynamoDBTableQuotaAlarm:
     Type: AWS::CloudWatch::Alarm
@@ -263,48 +285,70 @@ Resources:
     Properties:
       AlarmName: !Sub "${AWS::StackName}-asg-quota"
       AlarmDescription: !Sub "Alarm when Auto Scaling Groups count exceeds ${ASGQuotaThreshold}%"
-      MetricName: "ResourceCount"
-      Namespace: "AWS/Usage"
-      Dimensions:
-        - Name: "Service"
-          Value: "AutoScaling"
-        - Name: "Type"
-          Value: "Resource"
-        - Name: "Resource"
-          Value: "NumberOfAutoScalingGroup"
-        - Name: "Class"
-          Value: "None"
-      Statistic: "Maximum"
-      Period: 300
-      EvaluationPeriods: 1
-      Threshold: !Ref ASGQuotaThreshold
-      ComparisonOperator: "GreaterThanThreshold"
+      ActionsEnabled: true
       AlarmActions:
         - !Ref QuotaAlertsTopic
+      EvaluationPeriods: 2
+      DatapointsToAlarm: 2
+      Threshold: !Ref ASGQuotaThreshold
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      Metrics:
+        - Id: usage_data
+          ReturnData: false
+          MetricStat:
+            Metric:
+              Namespace: AWS/Usage
+              MetricName: ResourceCount
+              Dimensions:
+                - Name: Class
+                  Value: None
+                - Name: Resource
+                  Value: NumberOfAutoScalingGroup
+                - Name: Service
+                  Value: AutoScaling
+                - Name: Type
+                  Value: Resource
+            Period: 300
+            Stat: Maximum
+        - Id: pct_utilization
+          Label: "% Utilization"
+          ReturnData: true
+          Expression: (usage_data/SERVICE_QUOTA(usage_data))*100
 
   FirehoseStreamsQuotaAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
       AlarmName: !Sub "${AWS::StackName}-firehose-streams-quota"
       AlarmDescription: !Sub "Alarm when Firehose delivery streams count exceeds ${FirehoseQuotaThreshold}%"
-      MetricName: "ResourceCount"
-      Namespace: "AWS/Usage"
-      Dimensions:
-        - Name: "Service"
-          Value: "Firehose"
-        - Name: "Type"
-          Value: "Resource"
-        - Name: "Resource"
-          Value: "DeliveryStreams"
-        - Name: "Class"
-          Value: "None"
-      Statistic: "Maximum"
-      Period: 300
-      EvaluationPeriods: 1
-      Threshold: !Ref FirehoseQuotaThreshold
-      ComparisonOperator: "GreaterThanThreshold"
+      ActionsEnabled: true
       AlarmActions:
         - !Ref QuotaAlertsTopic
+      EvaluationPeriods: 2
+      DatapointsToAlarm: 2
+      Threshold: !Ref FirehoseQuotaThreshold
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      Metrics:
+        - Id: usage_data
+          ReturnData: false
+          MetricStat:
+            Metric:
+              Namespace: AWS/Usage
+              MetricName: ResourceCount
+              Dimensions:
+                - Name: Class
+                  Value: None
+                - Name: Resource
+                  Value: DeliveryStreams
+                - Name: Service
+                  Value: Firehose
+                - Name: Type
+                  Value: Resource
+            Period: 300
+            Stat: Maximum
+        - Id: pct_utilization
+          Label: "% Utilization"
+          ReturnData: true
+          Expression: (usage_data/SERVICE_QUOTA(usage_data))*100
 
   ECRImagesQuotaAlarm:
     Type: AWS::CloudWatch::Alarm
