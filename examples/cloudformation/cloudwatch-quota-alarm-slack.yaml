@@ -34,7 +34,7 @@ Parameters:
     MaxValue: 100
   ECRQuotaThreshold:
     Type: Number
-    Description: "Threshold percentage for ECR quota utilization"
+    Description: "Absolute threshold for ECR quota utilization"
     Default: 80
     MinValue: 1
     MaxValue: 100
@@ -350,30 +350,6 @@ Resources:
           ReturnData: true
           Expression: (usage_data/SERVICE_QUOTA(usage_data))*100
 
-  ECRImagesQuotaAlarm:
-    Type: AWS::CloudWatch::Alarm
-    Properties:
-      AlarmName: !Sub "${AWS::StackName}-ecr-images-quota"
-      AlarmDescription: !Sub "Alarm when ECR images per repository exceeds ${ECRQuotaThreshold}%"
-      MetricName: "ResourceCount"
-      Namespace: "AWS/Usage"
-      Dimensions:
-        - Name: "Service"
-          Value: "ECR"
-        - Name: "Type"
-          Value: "Resource"
-        - Name: "Resource"
-          Value: "ImagesPerRepository"
-        - Name: "Class"
-          Value: "None"
-      Statistic: "Maximum"
-      Period: 300
-      EvaluationPeriods: 1
-      Threshold: !Ref ECRQuotaThreshold
-      ComparisonOperator: "GreaterThanThreshold"
-      AlarmActions:
-        - !Ref QuotaAlertsTopic
-
   EC2vCPUQuotaAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
@@ -428,6 +404,154 @@ Resources:
       Period: 300
       EvaluationPeriods: 1
       Threshold: !Ref EC2QuotaThreshold
+      ComparisonOperator: "GreaterThanThreshold"
+      AlarmActions:
+        - !Ref QuotaAlertsTopic
+  LambdaExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: ECRAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - ecr:DescribeRepositories
+                  - ecr:DescribeImages
+                  - ecr:DescribeRegistry
+                Resource: '*'
+        - PolicyName: CloudWatchMetrics
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - cloudwatch:PutMetricData
+                Resource: '*'
+
+  MonitoringFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      Handler: index.lambda_handler
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Code:
+        ZipFile: |
+          import boto3
+          from datetime import datetime
+
+          def lambda_handler(event, context):
+              # Initialize boto3 clients
+              ecr_client = boto3.client('ecr', region_name='eu-central-1')
+              cloudwatch_client = boto3.client('cloudwatch', region_name='eu-central-1')
+              
+              try:
+                  # Default ECR quota
+                  DEFAULT_QUOTA = 10000
+                  image_quota = DEFAULT_QUOTA
+                  
+                  try:
+                      registry_info = ecr_client.describe_registry()
+                      if 'registryPolicy' in registry_info:
+                          policy = registry_info['registryPolicy']
+                          if 'rules' in policy and len(policy['rules']) > 0:
+                              quota = policy['rules'][0].get('maximumImagesPerRepository')
+                              if quota:
+                                  image_quota = quota
+                  except Exception as e:
+                      print(f"Using default quota. Error getting registry info: {str(e)}")
+                  
+                  print(f"Using image quota: {image_quota}")
+                  
+                  # Get list of all repositories
+                  repositories = ecr_client.describe_repositories()['repositories']
+                  max_images = 0
+                  
+                  # Find maximum image count across repositories
+                  for repo in repositories:
+                      images = ecr_client.describe_images(
+                          repositoryName=repo['repositoryName'],
+                          maxResults=1000
+                      )
+                      max_images = max(max_images, len(images['imageDetails']))
+                  
+                  # Calculate utilization percentage
+                  utilization_percent = (max_images / image_quota) * 100
+                  
+                  # Log metrics
+                  cloudwatch_client.put_metric_data(
+                      Namespace='AWS/ECR',
+                      MetricData=[
+                          {
+                              'MetricName': 'MaxImagesPerRepository',
+                              'Value': max_images,
+                              'Unit': 'Count',
+                              'Timestamp': datetime.utcnow()
+                          },
+                          {
+                              'MetricName': 'RepositoryQuota',
+                              'Value': image_quota,
+                              'Unit': 'Count',
+                              'Timestamp': datetime.utcnow()
+                          },
+                          {
+                              'MetricName': 'QuotaUtilization',
+                              'Value': utilization_percent,
+                              'Unit': 'Percent',
+                              'Timestamp': datetime.utcnow()
+                          }
+                      ]
+                  )
+                  
+                  return {
+                      'statusCode': 200,
+                      'body': f'Maximum image count: {max_images}, Utilization: {utilization_percent:.1f}%'
+                  }
+                  
+              except Exception as e:
+                  print(f"Error: {str(e)}")
+                  raise e
+      Runtime: python3.9
+      Timeout: 60
+      MemorySize: 128
+  ScheduleRule:
+    Type: AWS::Events::Rule
+    Properties:
+      Description: "Schedule for ECR Repository Monitor Lambda"
+      ScheduleExpression: "rate(30 minutes)"
+      State: ENABLED
+      Targets:
+        - Arn: !GetAtt MonitoringFunction.Arn
+          Id: "MonitoringFunctionTarget"
+
+  PermissionForEventsToInvokeLambda:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref MonitoringFunction
+      Action: "lambda:InvokeFunction"
+      Principal: "events.amazonaws.com"
+      SourceArn: !GetAtt ScheduleRule.Arn
+
+  ECRImagesQuotaAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub "${AWS::StackName}-ecr-images-quota"
+      AlarmDescription: !Sub "Alarm when ECR repository image count exceeds ${ECRQuotaThreshold}% of quota"
+      MetricName: "QuotaUtilization"
+      Namespace: "AWS/ECR"
+      Statistic: "Maximum"
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: !Ref ECRQuotaThreshold
       ComparisonOperator: "GreaterThanThreshold"
       AlarmActions:
         - !Ref QuotaAlertsTopic
