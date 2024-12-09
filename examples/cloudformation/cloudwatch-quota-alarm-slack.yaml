@@ -138,54 +138,6 @@ Resources:
       TopicArn: !Ref QuotaAlertsTopic
       Endpoint: !GetAtt QuotaAlarmsFunction.Arn
 
-  RDSInstancesQuotaAlarm:
-    Type: AWS::CloudWatch::Alarm
-    Properties:
-      AlarmName: !Sub "${AWS::StackName}-rds-instances-quota"
-      AlarmDescription: !Sub "Alarm when RDS instances quota utilization exceeds ${RDSQuotaThreshold}%"
-      MetricName: "ResourceCount"
-      Namespace: "AWS/Usage"
-      Dimensions:
-        - Name: "Service"
-          Value: "RDS"
-        - Name: "Type"
-          Value: "Resource"
-        - Name: "Resource"
-          Value: "DBInstances"
-        - Name: "Class"
-          Value: "None"
-      Statistic: "Maximum"
-      Period: 300
-      EvaluationPeriods: 1
-      Threshold: !Ref RDSQuotaThreshold
-      ComparisonOperator: "GreaterThanThreshold"
-      AlarmActions:
-        - !Ref QuotaAlertsTopic
-
-  RDSStorageQuotaAlarm:
-    Type: AWS::CloudWatch::Alarm
-    Properties:
-      AlarmName: !Sub "${AWS::StackName}-rds-storage-quota"
-      AlarmDescription: !Sub "Alarm when RDS allocated storage exceeds ${RDSQuotaThreshold}%"
-      MetricName: "ResourceCount"
-      Namespace: "AWS/Usage"
-      Dimensions:
-        - Name: "Service"
-          Value: "RDS"
-        - Name: "Type"
-          Value: "Resource"
-        - Name: "Resource"
-          Value: "AllocatedStorage"
-        - Name: "Class"
-          Value: "None"
-      Statistic: "Maximum"
-      Period: 300
-      EvaluationPeriods: 1
-      Threshold: !Ref RDSQuotaThreshold
-      ComparisonOperator: "GreaterThanThreshold"
-      AlarmActions:
-        - !Ref QuotaAlertsTopic
-
   ELBListenersPerNetworkQuotaAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
@@ -255,30 +207,6 @@ Resources:
           Label: "% Utilization"
           ReturnData: true
           Expression: (usage_data/SERVICE_QUOTA(usage_data))*100
-
-  DynamoDBTableQuotaAlarm:
-    Type: AWS::CloudWatch::Alarm
-    Properties:
-      AlarmName: !Sub "${AWS::StackName}-dynamodb-tables-quota"
-      AlarmDescription: !Sub "Alarm when DynamoDB table count exceeds ${DynamoDBQuotaThreshold}%"
-      MetricName: "ResourceCount"
-      Namespace: "AWS/Usage"
-      Dimensions:
-        - Name: "Service"
-          Value: "DynamoDB"
-        - Name: "Type"
-          Value: "Resource"
-        - Name: "Resource"
-          Value: "TableCount"
-        - Name: "Class"
-          Value: "None"
-      Statistic: "Maximum"
-      Period: 300
-      EvaluationPeriods: 1
-      Threshold: !Ref DynamoDBQuotaThreshold
-      ComparisonOperator: "GreaterThanThreshold"
-      AlarmActions:
-        - !Ref QuotaAlertsTopic
 
   AutoScalingGroupsQuotaAlarm:
     Type: AWS::CloudWatch::Alarm
@@ -350,30 +278,6 @@ Resources:
           ReturnData: true
           Expression: (usage_data/SERVICE_QUOTA(usage_data))*100
 
-  ECRImagesQuotaAlarm:
-    Type: AWS::CloudWatch::Alarm
-    Properties:
-      AlarmName: !Sub "${AWS::StackName}-ecr-images-quota"
-      AlarmDescription: !Sub "Alarm when ECR images per repository exceeds ${ECRQuotaThreshold}%"
-      MetricName: "ResourceCount"
-      Namespace: "AWS/Usage"
-      Dimensions:
-        - Name: "Service"
-          Value: "ECR"
-        - Name: "Type"
-          Value: "Resource"
-        - Name: "Resource"
-          Value: "ImagesPerRepository"
-        - Name: "Class"
-          Value: "None"
-      Statistic: "Maximum"
-      Period: 300
-      EvaluationPeriods: 1
-      Threshold: !Ref ECRQuotaThreshold
-      ComparisonOperator: "GreaterThanThreshold"
-      AlarmActions:
-        - !Ref QuotaAlertsTopic
-
   EC2vCPUQuotaAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
@@ -408,29 +312,6 @@ Resources:
           Label: "% Utilization"
           ReturnData: true
           Expression: "(usage_data/SERVICE_QUOTA(usage_data))*100"
-  EC2GP3StorageQuotaAlarm:
-    Type: AWS::CloudWatch::Alarm
-    Properties:
-      AlarmName: !Sub "${AWS::StackName}-ec2-gp3-storage-quota"
-      AlarmDescription: !Sub "Alarm when EC2 GP3 storage utilization exceeds ${EC2QuotaThreshold}%"
-      MetricName: "ResourceCount"
-      Namespace: "AWS/Usage"
-      Dimensions:
-        - Name: "Service"
-          Value: "EC2"
-        - Name: "Type"
-          Value: "Resource"
-        - Name: "Resource"
-          Value: "GP3Volume"
-        - Name: "Class"
-          Value: "None"
-      Statistic: "Maximum"
-      Period: 300
-      EvaluationPeriods: 1
-      Threshold: !Ref EC2QuotaThreshold
-      ComparisonOperator: "GreaterThanThreshold"
-      AlarmActions:
-        - !Ref QuotaAlertsTopic
 
   ChatbotRole:
     Type: AWS::IAM::Role
