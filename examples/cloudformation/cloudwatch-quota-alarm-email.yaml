@@ -2,42 +2,6 @@ AWSTemplateFormatVersion: "2010-09-09"
 Description: "CloudWatch alarms for AWS Service Quotas monitoring"
 
 Parameters:
-  RDSQuotaThreshold:
-    Type: Number
-    Description: "Threshold percentage for RDS quota utilization"
-    Default: 80
-    MinValue: 1
-    MaxValue: 100
-  ELBQuotaThreshold:
-    Type: Number
-    Description: "Threshold percentage for ELB quota utilization"
-    Default: 80
-    MinValue: 1
-    MaxValue: 100
-  DynamoDBQuotaThreshold:
-    Type: Number
-    Description: "Threshold percentage for DynamoDB quota utilization"
-    Default: 80
-    MinValue: 1
-    MaxValue: 100
-  ASGQuotaThreshold:
-    Type: Number
-    Description: "Threshold percentage for Auto Scaling Groups quota utilization"
-    Default: 80
-    MinValue: 1
-    MaxValue: 100
-  FirehoseQuotaThreshold:
-    Type: Number
-    Description: "Threshold percentage for Firehose quota utilization"
-    Default: 80
-    MinValue: 1
-    MaxValue: 100
-  ECRQuotaThreshold:
-    Type: Number
-    Description: "Threshold percentage for ECR quota utilization"
-    Default: 80
-    MinValue: 1
-    MaxValue: 100
   EC2QuotaThreshold:
     Type: Number
     Description: "Threshold percentage for EC2 quota utilization"
@@ -75,58 +39,6 @@ Resources:
       Protocol: email
       TopicArn: !Ref QuotaAlertsTopic
       Endpoint: !Ref NotificationEmail
-
-  QuotaAlarmsLogGroup:
-    Type: AWS::Logs::LogGroup
-    Properties:
-      LogGroupName: !Sub "/aws/quota-alarms/${AWS::StackName}"
-      RetentionInDays: 7
-
-  QuotaAlarmsFunction:
-    Type: AWS::Lambda::Function
-    Properties:
-      Handler: index.handler
-      Role: !GetAtt QuotaAlarmsRole.Arn
-      Code:
-        ZipFile: |
-          exports.handler = async (event) => {
-              const message = event.Records[0].Sns.Message;
-              console.log('Quota Alarm:', message);
-              return message;
-          };
-      Runtime: nodejs22.x
-      Timeout: 30
-      Environment:
-        Variables:
-          LOG_LEVEL: INFO
-
-  QuotaAlarmsRole:
-    Type: AWS::IAM::Role
-    Properties:
-      AssumeRolePolicyDocument:
-        Version: "2012-10-17"
-        Statement:
-          - Effect: Allow
-            Principal:
-              Service: lambda.amazonaws.com
-            Action: sts:AssumeRole
-      ManagedPolicyArns:
-        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
-
-  QuotaAlarmsFunctionPermission:
-    Type: AWS::Lambda::Permission
-    Properties:
-      Action: lambda:InvokeFunction
-      FunctionName: !Ref QuotaAlarmsFunction
-      Principal: sns.amazonaws.com
-      SourceArn: !Ref QuotaAlertsTopic
-
-  QuotaAlarmsFunctionSubscription:
-    Type: AWS::SNS::Subscription
-    Properties:
-      Protocol: lambda
-      TopicArn: !Ref QuotaAlertsTopic
-      Endpoint: !GetAtt QuotaAlarmsFunction.Arn
 
   ELBListenersPerNetworkQuotaAlarm:
     Type: AWS::CloudWatch::Alarm
