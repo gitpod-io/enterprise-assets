@@ -112,6 +112,4 @@ Outputs:
   SNSTopicARN:
     Description: "ARN of the SNS topic"
     Value: !Ref QuotaAlertsTopic
-  LogGroupName:
-    Description: "Name of the CloudWatch Log Group for alerts"
-    Value: !Ref QuotaAlarmsLogGroup
+
